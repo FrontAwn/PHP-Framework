@@ -13,30 +13,40 @@ class Compose {
 
 	private $continue = true;
 
+	private static $composeInstance = null;
+
 	public function __construct($application) {
-		$this->app = $application;
+		if( is_null($this->app) ) $this->app = $application;
+		if( is_null(self::$composeInstance) ) self::$composeInstance = $this;
 		$this->init();
+	}
+
+	public function getComposeInstance() {
+		return self::$composeInstance;
 	}
 
 
 	protected function init() {
-		$this->setResponses('compose',[
+		$this->setResponse('compose',[
 			'exit'=>$this->notContinue(),
 			'container'=>$this->getAppContainerClosure(),
-			'setResponse'=>$this->getSetResponsesClosure(),
 			'loadComponent'=>$this->getLoadComponentClosure(),
+			'setResponse'=>$this->getSetResponseClosure(),
+			'modifyResponse'=>$this->getModifyResponseClosure(),
 			'getLatestResponses'=>$this->getLatestResponsesClosure()
 		]);
 
+		$this->setResponse('path',$this->app->make('DefaultPathProvider'));
+
 		$this->insertComponent("exceptionComponent");
 		$this->insertComponent("http");
+		$this->insertComponent("databaseManager");
 		$this->insertComponent("router");
 	}
 
 
 	public function start(){
 		if( empty($this->pipe) ) {
-			echo "没有服务";
 			$this->end();
 			return;
 		}
@@ -60,7 +70,7 @@ class Compose {
 
 	public function insertComponent($sign,$concrete=null,array $parameters=[],$cache=true) {
 		$self = $this;
-		$method = function ($res) use ($self,$sign,$concrete,$parameters) {
+		$method = function ($res) use ($self,$sign,$concrete,$parameters,$cache) {
 			$component = $self->loadComponent($sign,$concrete,$parameters,$cache);
 			$component->getResponses($res);
 		};
@@ -69,7 +79,7 @@ class Compose {
 
 
 
-	protected function loadComponent($sign,$concrete=null,array $parameters=[],$cache=true) {
+	public function loadComponent($sign,$concrete=null,array $parameters=[],$cache=true) {
 		if( !$this->app->hasBinding($sign) ) {
 			if( $cache ) {
 				$this->app->cache($sign,$concrete);
@@ -90,8 +100,19 @@ class Compose {
 	}
 
 
-	protected function setResponses($key,$value) {
+	protected function setResponse($key,$value) {
 		$this->responses[$key] = $value;
+	}
+
+	protected function modifyResponse($key,array $params) {
+		if ( !isset($this->responses[$key]) ) return false;
+
+		foreach ($params as $option => $value) {
+			if(is_int($key)) {
+				continue;
+			}
+			$this->responses[$key][$option] = $value;
+		}
 	}
 
 	protected function getLatestResponses() {
@@ -105,10 +126,17 @@ class Compose {
 		};
 	}
 
-	protected function getSetResponsesClosure() {
+	protected function getSetResponseClosure() {
 		$self = $this;
 		return function ($key,$value) use ($self) {
-			$self->setResponses($key,$value);
+			$self->setResponse($key,$value);
+		};
+	}
+
+	protected function getModifyResponseClosure() {
+		$self = $this;
+		return function($key,array $params) use ($self) {
+			$self->modifyResponse($key,$params);
 		};
 	}
 
@@ -140,6 +168,12 @@ class Compose {
 	public function end($exception){
 		$message = $exception->getMessage();
 		$code = $exception->getCode();
+		if( isset($this->responses['database']['databaseList']) && count($this->responses['database']['databaseList']) > 0) {
+			$databaseList = $this->responses['database']['databaseList'];
+			foreach ($databaseList as $name => $database) {
+				$database->rollBack();
+			}
+		}
 		$this->app->clear();
 		$this->clear();
 		echo json_encode(array(

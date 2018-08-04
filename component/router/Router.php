@@ -147,6 +147,7 @@ class Router implements ComposeComponentContract {
 
 	private function resolveRoute($url=null) {
 		$responses = self::$responses;
+		$getLatestResponses = $responses['compose']['getLatestResponses'];
 		$route = ( is_null($url) ) ? $this->url : $url;
 		$method = $this->method;
 		$routerStack = $this->routes[$route][$method];
@@ -156,7 +157,7 @@ class Router implements ComposeComponentContract {
 		//运行所有route设置的匿名函数
 		if ( !empty($closures) ) {
 			foreach ($closures as $closure) {
-				$closure($responses);
+				$closure($getLatestResponses());
 			}	
 		}
 		//调用所有的controler函数
@@ -164,7 +165,7 @@ class Router implements ComposeComponentContract {
 			foreach ($controllers as $key => $controller) {
 				$controllerClass = $controller['class'];
 				$controllerMethod = $controller['method'];
-				$controllerClass->$controllerMethod($responses);
+				$controllerClass->$controllerMethod($getLatestResponses());
 			}
 		}
 		

@@ -9,12 +9,8 @@ use component\container\contract\ContainerContract;
 
 class Container implements ContainerContract{
 
-	//container采用单例模式
-	private static $instance = null;
-
 	//缓存被解析过的实例
 	private $instances = [];
-
 	//存储bind的所有函数脚本
 	private $bindings = [];
 
@@ -23,14 +19,6 @@ class Container implements ContainerContract{
 	private $resolved = [];
 
 	private $buildStack = [];
-
-	public static function getInstance() {
-		if ( is_null(static::$instance) ) {
-			static::$instance = new static;
-		}
-		return static::$instance;
-	}
-
 
 	public function bind($sign,$concrete=null,$cache=false) {
 

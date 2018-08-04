@@ -63,10 +63,6 @@ class Http implements ComposeComponentContract {
 		if( !empty($_COOKIE) ) $this->cookie = $_COOKIE;
 	}
 
-	private function resolveQueryString() {
-
-	}
-
 	private function getServerOption($option,$default=null) {
 		return isset($_SERVER[$option]) ? $_SERVER[$option] : $default;
 	}
