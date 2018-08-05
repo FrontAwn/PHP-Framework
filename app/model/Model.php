@@ -1,9 +1,9 @@
 <?php 
 namespace app\model;
 
-use component\database\driver\PDODriver;
+use Closure;
 use component\compose\Compose;
-
+use component\database\driver\PDODriver;
 
 class Model {
 
@@ -11,12 +11,27 @@ class Model {
 
 	protected $table = null;
 
+	private $values = []; 
+
+	private $selectSql = null;
+
+	private $whereSql = "";
+
+	private $childSql = "";
+
+	private $lastId = null;
+
+	private $rowCount = null;
+
 	private static $databases = [];
 
 	private static $compose = null;
 
+	private static $exception = null;
+
 	public static function __callStatic($database,$params) {
 		if( is_null(self::$compose) ) self::$compose = Compose::getComposeInstance();
+		if( is_null(self::$exception) ) self::$exception = self::$compose->getLatestResponses()['exception'];
 		$options = $params[0];
 		//self::$databases所缓存的键名
 		$key = strtolower($database);
@@ -62,17 +77,317 @@ class Model {
 
 
 
+	protected function insert(array $datas,$table=null) {
+		if ( empty($datas) ) return 0;
+		$db = $this->db;
+
+		if( is_null($table) ) $table = $this->table;
+
+		$dataKeys = array_keys($datas);
+
+		$columns = implode(",",$dataKeys);
+
+		foreach ($dataKeys as &$key) {
+			$key = ":".$key;
+		}
+
+		$values = implode(",",$dataKeys);
+
+		$sql = "insert into {$table} ({$columns}) values ({$values})";
+
+		$stmt = $db->prepare($sql);
+
+		$stmt->execute($datas);
+
+		$this->clearQueryCondition();
+
+		return $db->lastInsertId();
+	}
 
 
 
+	protected function update(array $datas,array $where,$table=null) {
+		if ( empty($datas) ) return 0;
+
+		if( is_null($table) ) $table = $this->table;
+		
+		$this->where($where);		
+
+		$whereSql = $this->whereSql;
+		$whereValues = $this->values;
+
+		$this->clearQueryCondition();
+
+		$conditions = [];
+
+		foreach ($datas as $key => $value) {
+			$conditions[] = "{$key}=:{$key}";
+		}
+
+		$conditions = implode(",", $conditions);
+
+		$values = array_merge($datas,$whereValues);
+
+		$sql = "update {$table} set {$conditions} {$whereSql}";
+
+		// \debug($sql,"update语句");
+		// \debug($values,"update所有绑定值");
+
+		$statement = $this->db->prepare($sql);
+		$statement->execute($values);
+
+		return $statement->rowCount();
+	}
+
+	protected function delete(array $where,$table=null) {
+		$error = self::$exception['error'];
+		if ( empty($where) ) $error("请添加删除条件(where)");
+
+		if( is_null($table) ) $table = $this->table;
+		
+		$this->where($where);		
+
+		$whereSql = $this->whereSql;
+		$whereValues = $this->values;
+
+		$this->clearQueryCondition();
+
+		$sql = "delete from {$table} {$whereSql}";
+		// \debug($sql,"delete删除语句");
+		// \debug($whereValues,"delete所有绑定值");
+		$statement = $this->db->prepare($sql);
+		$statement->execute($whereValues);
+		return $statement->rowCount();
+	}
+
+
+	protected function deleteById($id,$table=null) {
+		$condition = [$this->equals('id',$id)];
+		return $this->delete($condition,$table);
+	}
+
+
+	protected function sqlQuery(string $sql,array $values,$mode="all") {
+		$db = $this->db;
+		$statement = $db->prepare($sql);
+		$statement->execute($values);
+		if($mode == "all") $result = $statement->fetchAll();
+		if($mode == "once") $result = $statement->fetch();
+		return $result;
+	}
+
+	protected function sqlExecute(string $sql,array $values) {
+		$db = $this->db;
+		$statement = $db->prepare($sql);
+		$statement->execute($values);
+		$this->lastId = $db->lastInsertId();
+		$this->rowCount = $statement->rowCount();
+	}
+
+
+	protected function equals($column,$value,$conj="and") {
+		$pre = "{$column}=:{$column}";
+		$res = [$column=>$value];
+
+		return [
+			"pre"=>$pre,
+			"res"=>$res,
+			"conj"=>$conj,
+		];
+	}
+
+	protected function notEquals($column,$value,$conj="and") {
+		$pre = "{$column}!=:{$column}";
+		$res = [$column=>$value];
+
+		return [
+			"pre"=>$pre,
+			"res"=>$res,
+			"conj"=>$conj,
+		];
+	}
+
+
+	protected function greaterThan($column,$value,$conj="and") {
+		$pre = "{$column}>:{$column}";
+		$res = [$column=>$value];
+		return [
+			"pre"=>$pre,
+			"res"=>$res,
+			"conj"=>$conj,
+		];
+	}
+
+	protected function lessThan($column,$value,$conj="and") {
+		$pre = "{$column}<:{$column}";
+		$res = [$column=>$value];
+		return [
+			"pre"=>$pre,
+			"res"=>$res,
+			"conj"=>$conj,
+		];
+	}
+
+	protected function between($column,array $values,$conj="and") {
+		$large = $column.'Large';
+		$small = $column.'Small';
+		$pre = "{$column} between :{$large} and :{$small}";
+		$res = [$large=>$values['large'],$small=>$values['small']];
+		return [
+			"pre"=>$pre,
+			"res"=>$res,
+			"conj"=>$conj,
+		];
+	}
+
+	protected function like($column,$value,$conj="and") {
+		$pre = "{$column} like :{$column}";
+		$res = [$column=>$value];
+		return [
+			"pre"=>$pre,
+			"res"=>$res,
+			"conj"=>$conj,
+		];
+	}
+
+	protected function isNull($column,$conj="and") {
+		$pre = "{$column} is null";
+		$res = [];
+		return [
+			"pre"=>$pre,
+			"res"=>$res,
+			"conj"=>$conj,
+		];
+	}
+
+	protected function in($column,array $values,$conj="and") {
+		foreach ($values as $key => &$value) {
+			$value = "'".$value."'";
+		}
+		$values = implode(",", $values);
+		$pre = "{$column} in ({$values})";
+		$res = [];
+		return [
+			"pre"=>$pre,
+			"res"=>$res,
+			"conj"=>$conj,
+		];
+	}
+
+	protected function notIn($column,array $values,$conj="and") {
+		foreach ($values as $key => &$value) {
+			$value = "'".$value."'";
+		}
+		$values = implode(",", $values);
+		$pre = "{$column} not in ({$values})";
+		$res = [];
+		return [
+			"pre"=>$pre,
+			"res"=>$res,
+			"conj"=>$conj,
+		];
+	}
+
+	protected function isNotNull($column,$conj="and") {
+		$pre = "{$column} is not null";
+		$res = [];
+		return [
+			"pre"=>$pre,
+			"res"=>$res,
+			"conj"=>$conj,
+		];
+	}
+
+
+	protected function query(array $columns=["*"],$table=null,$child="") {
+		if( count($columns) > 1 ) {
+			$columnSql = implode(",", $columns);
+		} else {
+			$columnSql = $columns[0];
+		}
+
+		if( is_null($table) ) $tableSql = $this->table;
+		if( is_string($table) ) $tableSql = $table;
+		if( is_array($table) ) $tableSql = implode(",", $table);
+
+		$sql = "select {$columnSql} from {$tableSql} ";
+		$this->selectSql = $sql;
+		$this->childSql = $child;
+		return $this;
+
+	}
 
 
 
+	protected function where(array $options) {
+		$whereSql = "where ";
+		$whereValues = [];
+		$length = count($options);
+		foreach ($options as $key => $option) {
+			if( $length === 1 || $key === ($length-1) ) {
+				$whereSql.= $option["pre"];
+			} else {
+				$whereSql.= $option["pre"]." {$option["conj"]} ";
+			}
+			$whereValues = array_merge($whereValues,$option["res"]);
+		}
+		$this->whereSql = $whereSql;
+		$this->values = $whereValues;
+
+		return $this;
+	}
 
 
+	private function getQueryResult() {
+		if( !$this->isQuery() ) self::$error("搜索条件不够，请确认是否调用select和where函数");
+		$db = $this->db;
+		$sql = $this->select.$this->where.$this->child;
+		// \debug($this->select,'select语句');
+		// \debug($this->where,"当前sql语句where子句");
+		// \debug($this->values,"当前sql语句where子句所有绑定值");
+		\debug($sql,"当前sql语句");
+		$statement = $db->prepare($sql);
+		$statement->execute($this->values);
+		return $statement;
+	}
 
+	protected function once() {
+		$statement = $this->getQueryResult();
+		$result = $statement->fetch();
+		$this->clearQueryCondition();
+		return $result;
+	}
 
+	protected function all() {
+		$statement = $this->getQueryResult();
+		$result = $statement->fetchAll();
+		$this->clearQueryCondition();
+		return $result;
+	}
 
+	private function isQuery() {
+		return is_null($this->select) ? false : true;
+	}
 
+	private function clearQueryCondition() {
+		$this->select = null;
+		$this->where = null;
+		$this->child = "";
+		$this->values = [];
+	}
+
+	protected function getLastId() {
+		return $this->lastId;
+	}
+
+	protected function getRowCount() {
+		return $this->rowCount;
+	}
 
 }
+
+
+
+
+
+

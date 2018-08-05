@@ -115,7 +115,7 @@ class Compose {
 		}
 	}
 
-	protected function getLatestResponses() {
+	public function getLatestResponses() {
 		return $this->responses;
 	}
 

@@ -4,8 +4,8 @@ namespace app\controller;
 class Index {
 
 	public function index($res) {
-		$error = $res['exception']['error'];
-		$error("aaaa");
+		$word = $res['model']['english']['word'];
+		$word->test($res);
 	}
 
 }

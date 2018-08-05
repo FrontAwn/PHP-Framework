@@ -5,9 +5,8 @@ use app\model\Model;
 
 class Word extends Model {
 	
-	public function init() {
-		\debug($this->db);
-		\debug($this->table);
+	public function test($res) {
+		$error = $res['exception']['error'];
 	}
 
 }

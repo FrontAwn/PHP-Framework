@@ -17,10 +17,11 @@ return array(
 	"charset" => "utf8",
 
 	"options" => [
-		PDO::ATTR_PERSISTENT => true,
-		PDO::ATTR_AUTOCOMMIT => 0,
-		PDO::ATTR_EMULATE_PREPARES => false,
-		PDO::MYSQL_ATTR_INIT_COMMAND => 'set names utf8',
+		\PDO::ATTR_PERSISTENT => true,
+		\PDO::ATTR_AUTOCOMMIT => 0,
+		\PDO::ATTR_EMULATE_PREPARES => false,
+		\PDO::MYSQL_ATTR_INIT_COMMAND => 'set names utf8',
+		\PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC
 	],
 
 );
