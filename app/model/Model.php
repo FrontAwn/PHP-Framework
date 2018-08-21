@@ -13,11 +13,15 @@ class Model {
 
 	private $values = []; 
 
-	private $selectSql = null;
+	private $selectSql = "";
+
+	private $fromSql = "";
 
 	private $whereSql = "";
 
 	private $childSql = "";
+
+	private $limitSql = "";
 
 	private $lastId = null;
 
@@ -102,6 +106,63 @@ class Model {
 		$this->clearQueryCondition();
 
 		return $db->lastInsertId();
+	}
+
+
+	protected function insertAll(array $datas,$table=null) {
+		if ( empty($datas) ) return 0;
+		$db = $this->db;
+		if( is_null($table) ) $table = $this->table;
+		$dataCount = count($datas);
+		$dataKeys = array_keys($datas[0]);
+		$dataKeysCount = count($dataKeys);
+		$columns = implode(",",$dataKeys);
+
+		$valuesSqlArray = [];
+		for ($idx=1; $idx<=$dataCount; $idx++) {
+			array_push($valuesSqlArray, $this->getInsertAllValuesSql($dataKeysCount));
+		}
+
+		$valuesSql = implode(",", $valuesSqlArray);
+
+		$sql = "insert into {$table} ({$columns}) values {$valuesSql}";
+
+		$values = [];
+
+		foreach ($datas as $key => $data) {
+			$values = array_merge($values,array_values($data));
+		}
+		
+		$stmt = $db->prepare($sql);
+
+		$stmt->execute($values);
+
+		if( $db->lastInsertId() == 0 ) {
+			return [];
+		} else {
+			$ids = [];
+			$saveId = ($db->lastInsertId())-1;
+			for($idx=0; $idx<$dataCount; $idx++) {
+				$saveId += 1;
+				array_push($ids, $saveId);
+			}
+			return $ids;
+		}
+
+
+	}
+
+	private function getInsertAllValuesSql(int $dataKeysCount) {
+		$sql = "";
+		for($idx=1;$idx<=$dataKeysCount;$idx++) {
+			if($idx === $dataKeysCount) {
+				$sql.= "?";
+			}else {
+				$sql.= "?,";
+			}
+		}
+		$res = "({$sql})";
+		return $res;
 	}
 
 
@@ -299,25 +360,71 @@ class Model {
 	}
 
 
-	protected function query(array $columns=["*"],$table=null,$child="") {
+	protected function query(array $options=[],string $mode="all") {
+		if ( empty($options) ) {
+			return $this->select()->from()->all();
+		} else {
+
+			if( isset($options["column"]) ) {
+				$this->select($options["column"]);
+			} else {
+				$this->select();
+			}
+
+			if( isset($options["table"]) ) {
+				$this->from($options["table"]);
+			} else {
+				$this->from();
+			}
+
+			if ( isset($options["where"]) ) {
+				$this->where($options["where"]);
+			}
+
+			if( isset($options["child"]) ) {
+				$this->child($options["child"]);
+			}
+
+			if( isset($options['page']) && isset($options['length']) ) {
+				$this->limit([
+					"page"=>$options['page'],
+					"length"=>$options['length']
+				]);
+			}
+
+			switch ($mode) {
+				case 'all':
+					return $this->all();
+					break;
+				case 'once':
+					return $this->once();
+					break;
+			}
+
+		}
+
+	}
+
+	protected function select(array $columns=["*"]) {
 		if( count($columns) > 1 ) {
 			$columnSql = implode(",", $columns);
 		} else {
 			$columnSql = $columns[0];
 		}
 
+		$sql = "select {$columnSql} ";
+		$this->selectSql = $sql;
+		return $this;
+	}
+
+	protected function from($table=null) {
 		if( is_null($table) ) $tableSql = $this->table;
 		if( is_string($table) ) $tableSql = $table;
 		if( is_array($table) ) $tableSql = implode(",", $table);
-
-		$sql = "select {$columnSql} from {$tableSql} ";
-		$this->selectSql = $sql;
-		$this->childSql = $child;
+		$sql = "from {$tableSql} ";
+		$this->fromSql = $sql;
 		return $this;
-
 	}
-
-
 
 	protected function where(array $options) {
 		$whereSql = "where ";
@@ -337,13 +444,40 @@ class Model {
 		return $this;
 	}
 
+	protected function child(string $childSql) {
+		$this->childSql = "{$childSql} ";
+		return $this;
+	} 
+
+	protected function limit(array $limit=[]) {
+		if( !isset($limit["page"]) ) {
+			$page = 1;
+		} else {
+			$page = $limit["page"];
+		}
+
+		if( !isset($limit["length"]) ) {
+			$length = 10000;
+		} else {
+			$length = $limit["length"];
+		}
+
+		$limitPage = ($page-1)*$length;
+		$limitLength = $length;
+
+		$this->limitSql = "limit {$limitPage},{$limitLength}";
+		return $this;
+	}
+
 
 	private function getQueryResult() {
-		if( !$this->isQuery() ) self::$error("搜索条件不够，请确认是否调用select和where函数");
+		$error = self::$exception['error'];
+		if( !$this->isQuery() ) $error("搜索条件不够，请确认是否调用select和where函数");
 		$db = $this->db;
-		$sql = $this->select.$this->where.$this->child;
-		// \debug($this->select,'select语句');
-		// \debug($this->where,"当前sql语句where子句");
+		$sql = $this->selectSql.$this->fromSql.$this->whereSql.$this->childSql.$this->limitSql;
+		// \debug($this->selectSql,'select语句');
+		// \debug($this->childSql,'child语句');
+		// \debug($this->whereSql,"当前sql语句where子句");
 		// \debug($this->values,"当前sql语句where子句所有绑定值");
 		\debug($sql,"当前sql语句");
 		$statement = $db->prepare($sql);
@@ -366,13 +500,14 @@ class Model {
 	}
 
 	private function isQuery() {
-		return is_null($this->select) ? false : true;
+		return is_null($this->selectSql) ? false : true;
 	}
 
 	private function clearQueryCondition() {
-		$this->select = null;
-		$this->where = null;
-		$this->child = "";
+		$this->selectSql = "";
+		$this->whereSql = "";
+		$this->childSql = "";
+		$this->limitSql = "";
 		$this->values = [];
 	}
 

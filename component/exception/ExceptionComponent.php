@@ -25,9 +25,9 @@ class ExceptionComponent implements ComposeComponentContract {
 	public function error(string $message,$filename='common',$path=null) {
 		if( is_null($path) ) $path = realpath(__DIR__."/../../config/exception");
 		$path.='/';
-		$configFile = $path.$filename;
+		$configFile = $path.$filename.$this->configFileSuffix;
 		$config = $this->getConfig($configFile);
-		if( !empty($config) ) {
+		if( !empty($config) && isset($config["code"][$message]) ) {
 			$code = $config['code'][$message];
 			$msg = $config['message'][$code];
 		} else {

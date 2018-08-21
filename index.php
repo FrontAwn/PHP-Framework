@@ -1,6 +1,4 @@
 <?php 
-
-// require_once __DIR__.'/vendor/autoload.php';
 require_once __DIR__.'/component/loader/ClassLoader.php';
 require_once __DIR__.'/test/CommonFunction.php';
 (\component\loader\ClassLoader::getInstance())->register();

@@ -14,15 +14,15 @@ class Router implements ComposeComponentContract {
 
 	private $method = "";
 
-	private $namespace = "\app\controller";
+	private $routerMethod = "";
+
+	private $defaultControllerNameSpace = "\app\controller";
 
 	private $routes = [];
 
 	private $group = [];
 
 	private $groupPrefix = "";
-
-	private $groupPrefixs = [];
 
 	private $controllerObjects = [];
 
@@ -32,7 +32,6 @@ class Router implements ComposeComponentContract {
 		}
 		$this->url = $responses['http']['url'];
 		$this->method = strtolower($responses['http']['method']);
-
 		$parameters = [];
 		$setResponse = $responses['compose']['setResponse'];
 		switch ($this->method) {
@@ -52,33 +51,6 @@ class Router implements ComposeComponentContract {
 
 	}
 
-	public function match ($sign,$type='route') {	
-		if( $type === 'route' ) {
-			if( $this->compareRoute($sign) && $this->hasRouteMethod($sign,$this->method) ) {
-				$this->resolveRoute($sign);
-			} else {
-				$this->handleRouterException();
-			}
-		}
-
-		if( $type === 'group' ) {
-			$this->resolveGroup($sign);
-		}
-
-	}
-
-	public function getMatchClosure() {
-		$self = $this;
-		return function ($sign,$type='route') use ($self) {
-			$self->match($sign,$type);
-		};
-	}
-
-	public function redirect($url,$method="get") {
-		$this->url = $url;
-		$this->method = $method;
-		$this->match($url);
-	}
 
 	private function setGroup(string $group,...$parameters) {
 		$routeFilePath = $parameters[0];
@@ -87,51 +59,10 @@ class Router implements ComposeComponentContract {
 		}
 		$this->group[$group] = $routeFilePath;
 
-		//从这里才开始匹配所设置的group,如果匹配成功则引入group文件
-		$this->match($group,'group');
+		$this->resolveGroup($group);
+
 		\debug($this->group,"group路由组列表");
 	}
-
-	private function setRoute(string $url, ...$parameters) {
-		$error = self::$responses['exception']['error'];
-		$lastIndex = count($parameters) - 1;
-		$method = $parameters[$lastIndex];
-		unset($parameters[$lastIndex]);
-		$length = count($parameters);
-		$closure = [];
-		$controller = [];
-		$options = [];
-		if( $length === 0 ) {
-			$error('ERROR_ROUTER_PARAMETER_EXCEPTION');
-		}
-
-		for ($idx=0; $idx<$length; $idx++) {
-			if ( $parameters[$idx] instanceof Closure ) {
-				array_push($closure,$parameters[$idx]);
-			} else if( is_string($parameters[$idx]) && strpos($parameters[$idx],"@") !== false ) {
-				array_push($controller,$parameters[$idx]);
-			} else if( is_array($parameters[$idx]) ) {
-				$options = array_merge($options,$parameters[$idx]);
-			} else {
-				$error('ERROR_ROUTER_PARAMETER_EXCEPTION');
-			}
-		}
-
-		$url = $this->resolveUrl($url,$options);
-
-		$this->routes[$url][$method] = [
-			'closure' => $closure,
-			'controller' => $controller,
-		];
-
-		\debug($this->routes,"routes路由列表");
-
-
-		//从这里才开始匹配所设置的routes,如果匹配成功则调用对应route
-		$this->match($url,'route');
-
-	}
-	
 
 	private function resolveGroup(string $group) {
 		$url = $this->url;
@@ -143,14 +74,52 @@ class Router implements ComposeComponentContract {
 		}
 	}
 
+	private function setRoute(string $url, ...$parameters) {
+		$error = self::$responses['exception']['error'];
+		$lastIndex = count($parameters) - 1;
+		$method = $parameters[$lastIndex];
+		unset($parameters[$lastIndex]);
+
+		if( empty($parameters) ) {
+			$error('ERROR_ROUTER_PARAMETER_EXCEPTION');
+		}
+
+		$closure = [];
+		$controller = [];
+		$options = [];
+
+		foreach ($parameters as $key => $param) {
+			if ( $param instanceof Closure ) {
+				array_push($closure,$param);
+			} else if( is_string($param) && strpos($param,"@") !== false ) {
+				array_push($controller,$param);
+			} else if( is_array($param) ) {
+				$options = array_merge($options,$param);
+			} else {
+				$error('ERROR_ROUTER_PARAMETER_EXCEPTION');
+			}
+		}
+		
+		$url = $this->resolveOptions('url',$url,$options);
+
+		if( $this->url === $url && $this->method === $method ) {
+
+			$this->routes[$url][$method] = [
+				'closure' => $closure,
+				'controller' => $controller,
+			];
+			$this->resolveRoute($url,$method);
+			\debug($this->routes,"routes路由列表");
+		}
+
+	}
+	
 
 
-	private function resolveRoute($url=null) {
+	private function resolveRoute($url,$method) {
 		$responses = self::$responses;
 		$getLatestResponses = $responses['compose']['getLatestResponses'];
-		$route = ( is_null($url) ) ? $this->url : $url;
-		$method = $this->method;
-		$routerStack = $this->routes[$route][$method];
+		$routerStack = $this->routes[$url][$method];
 		$closures = $routerStack['closure'];
 		$controllers = $this->resolveController($routerStack['controller']);
 		\debug($this->controllerObjects,"controller对象列表");
@@ -175,12 +144,27 @@ class Router implements ComposeComponentContract {
 
 	private function resolveController(array $controllers) {
 		if ( empty($controllers) ) return [];
+		$error = self::$responses['exception']['error'];
 		$resolvedControllers = [];
 		foreach ($controllers as $key => $value) {
 			$controllerOptions = explode("@", $value);
-			$controllerClass = $this->namespace."\\".$controllerOptions[0];
-			$controllerMethod = $controllerOptions[1];
+
 			
+			$controllerMethod = end($controllerOptions);
+			array_pop($controllerOptions);
+			$controllerClassName = end($controllerOptions);
+			array_pop($controllerOptions);
+
+			if ( empty($controllerOptions) ) $controllerNameSpace = "";
+			if( count($controllerOptions) > 1 ) {
+				$controllerNameSpace = implode("\\", $controllerOptions);
+				$controllerNameSpace.="\\";
+			} else {
+				$controllerNameSpace = $controllerOptions[0];
+			}
+
+			$controllerClass = $this->defaultControllerNameSpace."\\".$controllerNameSpace.$controllerClassName;
+
 			if( isset($this->controllersObjects[$controllerClass]) ) {
 				$controllerObject = $this->controllersObjects[$controllerClass];
 			} else {
@@ -197,7 +181,13 @@ class Router implements ComposeComponentContract {
 		return $resolvedControllers;
 	}
 
-
+	private function resolveOptions(string $specify,$params,array $options) {
+		switch ($specify) {
+			case 'url':
+				return $this->resolveUrl($params,$options);
+				break;
+		}
+	}
 
 	private function resolveUrl($url,array $options=[]) {
 		if( $url[0] !== "/" ) {
@@ -208,27 +198,11 @@ class Router implements ComposeComponentContract {
 
 		if( $prefix !== "" && $url === '/') $url = "";
 
-		// if( isset($options['redirect']) ) $this->url = $options['redirect'];
-
 		return $prefix.$url;
 	}
 
-
-
-	private function compareRoute(string $url) {
-		return ($url === $this->url) ? true : false;
-	}
-
-	private function hasGroup(string $group) {
-		return isset($this->group[$group]);
-	}
-
-	private function hasRoute(string $route) {
-		return isset( $this->routes[$route] );
-	}
-
-	private function hasRouteMethod(string $route,string $method) {
-		return isset( $this->routes[$route][$method] );
+	private function setControllerNameSpace($namespace) {
+		$this->defaultControllerNameSpace = $namespace;
 	}
 
 
@@ -241,6 +215,7 @@ class Router implements ComposeComponentContract {
 			"group" => "setGroup",
 			"get" => "setRoute",
 			"post" => "setRoute",
+			"namespace" => "setControllerNameSpace",
 		];
 		if( isset($options[$methodName]) ) {
 			array_push($methodParams,$methodName);
@@ -248,12 +223,6 @@ class Router implements ComposeComponentContract {
 		} else {
 			$error('ERROR_ROUTER_METHOD_DENIED');
 		}
-	}
-
-	private function handleRouterException() {
-		$error = self::$responses['exception']['error'];
-		$error('ERROR_ROUTER_NOT_MATCH');
-		// require_once realpath(__DIR__.'/../../app/Error.php');
 	}
 
 }

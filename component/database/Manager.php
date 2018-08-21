@@ -36,7 +36,7 @@ class Manager implements ComposeComponentContract{
 			'path'=>$configPath
 		];
 
-		$databaseTableModel = call_user_func("{$model}::$configName",$params);
+		$databaseTableModel = call_user_func("{$model}::{$configName}",$params);
 		$databases = call_user_func("{$model}::getDatabases");
 		self::$models[$databaseName][$tableName] = $databaseTableModel;
 		$setResponse('model',self::$models);
