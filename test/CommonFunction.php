@@ -6,3 +6,4 @@ function debug($code,$statement="") {
 		echo "<hr><br/>";
 	}
 }
+

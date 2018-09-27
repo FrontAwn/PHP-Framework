@@ -16,4 +16,16 @@ class Word {
 		}
 	}
 
+	function search($res) {
+		$wordModel = $res['model']['english']['word'];
+		$ajax = $res['http']['setData'];
+		$conditions = $res['router']['params']['conditions'];
+		$words = $wordModel->searchWord($conditions);
+		if(!empty($words)) {
+			$words['ids'] = array_keys($words);
+		}else{
+			$words['ids'] = [];
+		}
+		$ajax($words);
+	}
 }

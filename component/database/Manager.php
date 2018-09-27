@@ -23,22 +23,27 @@ class Manager implements ComposeComponentContract{
 	public function loadModel($databaseName,$tableName,$configPath=null,$namespace='\\app\\model\\',$model='Model') {
 		$setResponse = self::$responses['compose']['setResponse'];
 		$modifyResponse = self::$responses['compose']['modifyResponse'];
-		//数据库配置文件名称
+
+		// 数据库配置文件名称
 		$configName = ucfirst($databaseName);
-		//要加载库的指定表名
-		$tableClassName = ucfirst($tableName);
-		$tableNamespace = $namespace.$databaseName;
+		// 表model类的名称 and 要加载库的指定表名
+		$tableModelClassName = ucfirst($tableName);
+		// 表model类的命名空间
+		$tableModelNamespace = $namespace.$databaseName;
+		// 父Model类的完整路径
 		$model = $namespace.$model;
 
 		$params = [
-			'table'=>$tableClassName,
-			'namespace'=>$tableNamespace,
+			'table'=>$tableModelClassName,
+			'namespace'=>$tableModelNamespace,
 			'path'=>$configPath
 		];
 
-		$databaseTableModel = call_user_func("{$model}::{$configName}",$params);
+		// 通过Model::__callStatic获得指定表的model对象
+		$databaseTableModelObject = call_user_func("{$model}::{$configName}",$params);
+		// 得到所有的已经实例pdo数据库对象
 		$databases = call_user_func("{$model}::getDatabases");
-		self::$models[$databaseName][$tableName] = $databaseTableModel;
+		self::$models[$databaseName][$tableName] = $databaseTableModelObject;
 		$setResponse('model',self::$models);
 		$modifyResponse('database',['databaseList'=>$databases]);
 	}

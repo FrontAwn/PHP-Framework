@@ -46,7 +46,7 @@ class Model {
 		//存在ioc容器中的键名
 		$databaseContainerKey = "database".$database;
 		//要加载数据库中的对应表的完整类名
-		$tableClass = $options['namespace'].'\\'.$options['table'];
+		$tableModelClass = $options['namespace'].'\\'.$options['table'];
 
 		//使用PDO驱动加载对应配置的数据库对象
 		if( !isset(self::$databases[$key]) ) {
@@ -61,17 +61,17 @@ class Model {
 			self::$databases[$key] = $db;
 		}
 
-		$tableObject = new $tableClass;
-		call_user_func(array($tableObject,'getConnect'),$key);
-		call_user_func(array($tableObject,'setTable'),strtolower($options['table']));
-		return $tableObject;
+		$tableModelObject = new $tableModelClass;
+		call_user_func(array($tableModelObject,'setConnect'),$key);
+		call_user_func(array($tableModelObject,'setTable'),lcfirst($options['table']));
+		return $tableModelObject;
 	}
 
 	public static function getDatabases () {
 		return self::$databases;
 	}
 
-	final protected function getConnect($key) {
+	final protected function setConnect($key) {
 		$this->db = self::$databases[$key];
 	}
 
@@ -133,9 +133,15 @@ class Model {
 			$values = array_merge($values,array_values($data));
 		}
 		
+		// \debug($sql);
+
 		$stmt = $db->prepare($sql);
 
 		$stmt->execute($values);
+
+		// \debug($values);
+
+		// \debug($db->lastInsertId());
 
 		if( $db->lastInsertId() == 0 ) {
 			return [];
@@ -385,10 +391,19 @@ class Model {
 				$this->child($options["child"]);
 			}
 
-			if( isset($options['page']) && isset($options['length']) ) {
+			if( isset($options['number']) ) {
+				$this->number($options['number']);
+			}
+
+			if( isset($options['page']) || isset($options['length']) ) {
+
+				$page = isset($options['page']) ? $options['page'] : 1;
+
+				$length = isset($options['length']) ? $options['length'] : 9999;
+
 				$this->limit([
-					"page"=>$options['page'],
-					"length"=>$options['length']
+					"page"=>$page,
+					"length"=>$length,
 				]);
 			}
 
@@ -432,7 +447,7 @@ class Model {
 		$length = count($options);
 		foreach ($options as $key => $option) {
 			if( $length === 1 || $key === ($length-1) ) {
-				$whereSql.= $option["pre"];
+				$whereSql.= $option["pre"]." ";
 			} else {
 				$whereSql.= $option["pre"]." {$option["conj"]} ";
 			}
@@ -448,6 +463,11 @@ class Model {
 		$this->childSql = "{$childSql} ";
 		return $this;
 	} 
+
+	protected function number(int $num) {
+		$this->limitSql = " limit {$num}";
+		return $this;
+	}
 
 	protected function limit(array $limit=[]) {
 		if( !isset($limit["page"]) ) {
@@ -465,7 +485,7 @@ class Model {
 		$limitPage = ($page-1)*$length;
 		$limitLength = $length;
 
-		$this->limitSql = "limit {$limitPage},{$limitLength}";
+		$this->limitSql = " limit {$limitPage},{$limitLength}";
 		return $this;
 	}
 
@@ -488,6 +508,9 @@ class Model {
 	protected function once() {
 		$statement = $this->getQueryResult();
 		$result = $statement->fetch();
+		if( $result === false) {
+			$result = [];
+		}
 		$this->clearQueryCondition();
 		return $result;
 	}
@@ -517,6 +540,52 @@ class Model {
 
 	protected function getRowCount() {
 		return $this->rowCount;
+	}
+
+
+// ---------------------------------commonFunction---------------------------
+
+	protected function indexBy($key,array $datas) {
+		$res = [];
+
+		foreach ($datas as $value) {
+			$res[$value[$key]] = $value;
+		}
+
+		return $res; 
+	}
+
+	protected function randomOfNumber($max,$length=20,array $except=[],$min=1) {
+		$scopeArray = range($min, $max);
+		$diff = array_diff($scopeArray, $except);
+		if( !empty($diff) ) {
+			shuffle($diff);
+			if( $length !== 0) {
+				$random = array_slice($diff, 0, $length);
+			} else {
+				$random = $diff;
+			}
+			return $random;
+		} else {
+			return [];
+		}
+	}
+
+	protected function randomOfArray(array $datas=[],$length=20,array $except=[]){
+		shuffle($datas);
+
+		if ( !empty($except) ) {
+			$res = array_diff($datas, $except);
+		} else {
+			$res = $datas;
+		}
+
+		if ( $length !== 0 ) {
+			return array_slice($res, 0, $length);	
+		} else {
+			return $res;
+		}
+		
 	}
 
 }
