@@ -46,11 +46,7 @@ Router::get('titles/by/series/id',"Course@courseTitleBySeriesId",function($res){
 	$loadModel("course","course");
 });
 
-//添加问题
-Router::post('/question/add',"Question@add",function($res){
-	$loadModel = $res['database']['loadModel'];
-	$loadModel("course","question");
-});
+
 
 //得到所有课程类型
 Router::get('/series/ls',"CourseSeries@ls",function($res){
@@ -63,4 +59,22 @@ Router::get('/question_type/ls',"QuestionType@ls",function($res){
 	$loadModel = $res['database']['loadModel'];
 	$loadModel("course","questionType");
 });
+
+
+//题库添加问题
+Router::post('/question/add',"Question@add",function($res){
+	$loadModel = $res['database']['loadModel'];
+	$loadModel("course","question");
+});
+
+//根据条件获取题库种的问题
+Router::get('/question/ls',"Question@ls",function($res){
+	$loadModel = $res['database']['loadModel'];
+	$loadModel("course","question");
+	$loadModel("course","questionType");
+});
+
+
+
+
 

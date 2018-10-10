@@ -7,3 +7,13 @@ function debug($code,$statement="") {
 	}
 }
 
+function indexBy($key,array $datas) {
+	$res = [];
+
+	foreach ($datas as $value) {
+		$res[$value[$key]] = $value;
+	}
+
+	return $res; 
+}
+

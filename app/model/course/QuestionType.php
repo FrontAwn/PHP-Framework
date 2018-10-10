@@ -9,4 +9,10 @@ class QuestionType extends Model {
 		return $this->query(['child'=>"order by id asc"]);
 	}
 
+	function getQuestionTypeById($id) {
+		return $this->query([
+			'where'=>[$this->equals('id',$id)]
+		]);
+	}
+
 }

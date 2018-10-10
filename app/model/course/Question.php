@@ -12,4 +12,15 @@ class Question extends Model {
 		return $this->insert($question);
 	}
 
+	function getQuestionLs($condistion) {
+		$condition = json_decode($condistion,true);
+		$where = [
+			$this->equals('series_id',$condition['series_id']),
+		];
+		if( $condition['course_id'] != 0 ) {
+			array_push($where, $this->equals('course_id',$condition['course_id']));			
+		}
+		return $this->query(['where'=>$where]);
+	}
+
 }

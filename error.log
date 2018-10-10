@@ -8,3 +8,5 @@
 2018/07/28 21:21:56 [crit] 749#0: *598 open() "/usr/local/var/run/nginx/fastcgi_temp/3/00/0000000003" failed (13: Permission denied) while reading upstream, client: 127.0.0.1, server: localhost, request: "GET /?debug HTTP/1.1", upstream: "fastcgi://127.0.0.1:9000", host: "localhost:6006"
 2018/07/30 13:25:55 [crit] 749#0: *1466 open() "/usr/local/var/run/nginx/fastcgi_temp/4/00/0000000004" failed (13: Permission denied) while reading upstream, client: 127.0.0.1, server: localhost, request: "GET /aaa?debug HTTP/1.1", upstream: "fastcgi://127.0.0.1:9000", host: "localhost:6006"
 2018/09/01 15:55:41 [alert] 14900#0: *6187 setsockopt(TCP_NODELAY) failed (22: Invalid argument) while keepalive, client: 127.0.0.1, server: 0.0.0.0:6006
+2018/10/09 17:18:46 [alert] 42666#0: *457 setsockopt(TCP_NODELAY) failed (22: Invalid argument) while keepalive, client: 127.0.0.1, server: 0.0.0.0:6006
+2018/10/10 11:42:29 [alert] 42666#0: *649 setsockopt(TCP_NODELAY) failed (22: Invalid argument) while keepalive, client: 127.0.0.1, server: 0.0.0.0:6006
